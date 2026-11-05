@@ -61,7 +61,16 @@ int main() {
     // requests, collect stats, but won't suspend the device. We want this behavior on devices
     // (hosts) where system suspend should not be handles by Android platform e.g. ARC++, Android
     // virtual devices.
-    if (wakeupCountFd < 0 || stateFd < 0) {
+    //
+    // Android earlysuspend kernels (3.0 era) suspend on their own once "mem" has been written to
+    // /sys/power/state and no kernel wakelock is held; the write returns immediately, so the
+    // autosuspend loop would spin. Wakelocks already go to /sys/power/wake_lock here, and the
+    // power HAL writes "on"/"mem" from the interactive state.
+    bool earlysuspend = access("/sys/power/wait_for_fb_sleep", F_OK) == 0;
+    if (earlysuspend) {
+        LOG(INFO) << "earlysuspend kernel: autosuspend left to the kernel";
+    }
+    if (wakeupCountFd < 0 || stateFd < 0 || earlysuspend) {
         // This will block all reads/writes to these fds from the suspend thread.
         Socketpair(SOCK_STREAM, &wakeupCountFd, &stateFd);
     }
